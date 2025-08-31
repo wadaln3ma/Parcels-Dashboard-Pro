@@ -1,0 +1,43 @@
+{
+  "type": "FeatureCollection",
+  "features": [
+    {
+      "type": "Feature",
+      "properties": {
+        "name": "Primary Rd A"
+      },
+      "geometry": {
+        "type": "LineString",
+        "coordinates": [
+          [
+            46.668,
+            24.709
+          ],
+          [
+            46.69,
+            24.716
+          ]
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "name": "Secondary Rd B"
+      },
+      "geometry": {
+        "type": "LineString",
+        "coordinates": [
+          [
+            46.673,
+            24.712
+          ],
+          [
+            46.686,
+            24.718
+          ]
+        ]
+      }
+    }
+  ]
+}

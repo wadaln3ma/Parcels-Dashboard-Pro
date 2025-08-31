@@ -1,0 +1,2 @@
+import { NextResponse } from 'next/server';
+export async function GET(){ const fc = await import('@/data/parcels_sample.json'); return new NextResponse(JSON.stringify(fc.default||fc),{headers:{'content-type':'application/geo+json','content-disposition':'attachment; filename="selection.geojson"'}});}

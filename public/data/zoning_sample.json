@@ -1,0 +1,71 @@
+{
+  "type": "FeatureCollection",
+  "features": [
+    {
+      "type": "Feature",
+      "properties": {
+        "zone": "Residential"
+      },
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [
+          [
+            [
+              46.675,
+              24.709
+            ],
+            [
+              46.683,
+              24.709
+            ],
+            [
+              46.683,
+              24.714
+            ],
+            [
+              46.675,
+              24.714
+            ],
+            [
+              46.675,
+              24.709
+            ]
+          ]
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "zone": "Industrial"
+      },
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [
+          [
+            [
+              46.684,
+              24.714
+            ],
+            [
+              46.691,
+              24.714
+            ],
+            [
+              46.691,
+              24.719
+            ],
+            [
+              46.684,
+              24.719
+            ],
+            [
+              46.684,
+              24.714
+            ]
+          ]
+        ]
+      }
+    }
+  ]
+}
