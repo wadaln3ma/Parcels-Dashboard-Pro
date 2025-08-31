@@ -3,7 +3,9 @@
 import { useEffect, useRef, useState } from 'react';
 import L from 'leaflet';
 import 'leaflet-draw';
-import * as turf from '@turf/turf';
+import area from '@turf/area';
+import length from '@turf/length';
+import polygonToLine from '@turf/polygon-to-line';
 import html2canvas from 'html2canvas';
 import { jsPDF } from 'jspdf';
 import { Search, Layers, Ruler, FileDown, Download, Map as MapIcon, SunMoon, Target } from 'lucide-react';
@@ -266,11 +268,14 @@ export default function Home() {
 
   function computeStats(f: Feature) {
     try {
-      const area = turf.area(f) / 10000; // ha
-      const perimeter = turf.length(f, {units:'kilometers'}); // km
-      return { areaHa: area, perimeterKm: perimeter };
-    } catch { return { areaHa: null, perimeterKm: null }; }
-  }
+      const aHa = area(f) / 10_000; // m² → hectares
+      const line = polygonToLine(f as any); // convert polygon→line(s) for perimeter
+      const pKm = length(line as any, { units: 'kilometers' });
+      return { areaHa: aHa, perimeterKm: pKm };
+    } catch {
+      return { areaHa: null, perimeterKm: null };
+    }
+  }  
 
   async function uploadAOI(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
