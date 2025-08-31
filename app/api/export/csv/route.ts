@@ -15,7 +15,7 @@ export async function GET() {
 
     const header = 'id,owner,wkt\n';
     const body = rows
-      .map((r) => `${r.id},${JSON.stringify(r.owner ?? '')},${JSON.stringify(r.wkt)}`)
+      .map((r: ParcelRow) => `${r.id},${JSON.stringify(r.owner ?? '')},${JSON.stringify(r.wkt)}`)
       .join('\n');
 
     return new NextResponse(header + body, {
