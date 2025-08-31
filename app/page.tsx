@@ -2,29 +2,29 @@
 export const dynamic = 'force-dynamic';
 
 import { useEffect, useRef, useState } from 'react';
-import L from 'leaflet';
-// Load Turf submodules with typings (avoid '@turf/turf' to dodge TS "exports" issue)
 import area from '@turf/area';
 import length from '@turf/length';
 import polygonToLine from '@turf/polygon-to-line';
-// html2canvas + jsPDF will be imported on demand inside functions (SSR-safe)
 import { Search, Layers, Ruler, FileDown, Download, Map as MapIcon, SunMoon, Target } from 'lucide-react';
 
 type Feature = GeoJSON.Feature<GeoJSON.Geometry, any>;
 type FeatureCollection = GeoJSON.FeatureCollection<GeoJSON.Geometry, any>;
 
-function useLeaflet() {
-  const mapRef = useRef<L.Map | null>(null);
-  const parcelLayerRef = useRef<L.GeoJSON | null>(null);
-  const selectionRef = useRef<L.GeoJSON | null>(null);
-  const bufferRef = useRef<L.GeoJSON | null>(null);
+function useLeafletState() {
+  const mapRef = useRef<any>(null);
+  const parcelLayerRef = useRef<any>(null);
+  const selectionRef = useRef<any>(null);
+  const bufferRef = useRef<any>(null);
   return { mapRef, parcelLayerRef, selectionRef, bufferRef };
 }
 
 export default function Home() {
-  const { mapRef, parcelLayerRef, selectionRef, bufferRef } = useLeaflet();
+  const { mapRef, parcelLayerRef, selectionRef, bufferRef } = useLeafletState();
   const mapDivRef = useRef<HTMLDivElement>(null);
   const overlayRef = useRef<HTMLDivElement>(null);
+
+  // holds the Leaflet module once loaded (SSR-safe)
+  const LRef = useRef<any>(null);
   const leafletDrawLoadedRef = useRef(false);
 
   const [query, setQuery] = useState('');
@@ -37,42 +37,60 @@ export default function Home() {
   const [dark, setDark] = useState(false);
   const [locating, setLocating] = useState(false);
 
-  const roadsRef = useRef<L.GeoJSON | null>(null);
-  const zoningRef = useRef<L.GeoJSON | null>(null);
+  const roadsRef = useRef<any>(null);
+  const zoningRef = useRef<any>(null);
   const [showRoads, setShowRoads] = useState(true);
   const [showZoning, setShowZoning] = useState(true);
 
-  const aoiRef = useRef<L.GeoJSON | null>(null);
+  const aoiRef = useRef<any>(null);
   const [tableFeatures, setTableFeatures] = useState<FeatureCollection>({ type:'FeatureCollection', features: [] });
 
-  // Sync 'dark' class on <html> and auto-swap basemap
+  // ---------- helpers to load libs only in browser ----------
+  async function ensureLeaflet() {
+    if (!LRef.current) {
+      const mod = await import('leaflet');
+      // Some bundlers export as default, some as module—support both
+      LRef.current = (mod as any).default || mod;
+    }
+    return LRef.current;
+  }
+
+  async function ensureLeafletDraw() {
+    await ensureLeaflet();
+    if (!leafletDrawLoadedRef.current) {
+      await import('leaflet-draw'); // augments L with Draw controls
+      leafletDrawLoadedRef.current = true;
+    }
+  }
+
+  // ---------- Dark mode sync ----------
   useEffect(() => {
     const root = document.documentElement;
     if (dark) root.classList.add('dark'); else root.classList.remove('dark');
-    const current = basemap;
-    if (dark && current === 'carto') setBasemapLayer('carto-dark');
-    if (!dark && current === 'carto-dark') setBasemapLayer('carto');
+    if (dark && basemap === 'carto') setBasemapLayer('carto-dark');
+    if (!dark && basemap === 'carto-dark') setBasemapLayer('carto');
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [dark]);
 
+  // ---------- Map init ----------
   useEffect(() => {
-    if (!mapDivRef.current) return;
-    if (mapRef.current) return;
-
-    const map = L.map(mapDivRef.current, { zoomControl: false }).setView([24.7136, 46.6753], 12);
-    mapRef.current = map;
-    L.control.zoom({ position: 'topright' }).addTo(map);
-    L.control.scale({ metric: true, imperial: false }).addTo(map);
-
-    // Base layer
-    (map as any)._currentBase = getBasemapLayer('osm').addTo(map);
-
     let cancelled = false;
-
-    // Load leaflet-draw only in the browser before using it
     (async () => {
+      if (!mapDivRef.current || mapRef.current) return;
+
+      const L = await ensureLeaflet();
+      const map = L.map(mapDivRef.current, { zoomControl: false }).setView([24.7136, 46.6753], 12);
+      mapRef.current = map;
+
+      L.control.zoom({ position: 'topright' }).addTo(map);
+      L.control.scale({ metric: true, imperial: false }).addTo(map);
+
+      (map as any)._currentBase = getBasemapLayer('osm')?.addTo(map);
+
+      // Leaflet Draw (lazy)
       await ensureLeafletDraw();
       if (cancelled || !mapRef.current) return;
+
       const drawn = new L.FeatureGroup();
       map.addLayer(drawn);
       const drawControl = new (L as any).Control.Draw({
@@ -104,59 +122,53 @@ export default function Home() {
           setTableFeatures({ type:'FeatureCollection', features: [] });
         }
       });
-    })();
 
-    // Load parcels
-    fetch('/api/parcels').then(r=>r.json()).then((fc: FeatureCollection) => {
+      // Parcels
+      const parcelsFc: FeatureCollection = await fetch('/api/parcels').then(r=>r.json());
       if (cancelled || !mapRef.current) return;
-      const layer = L.geoJSON(fc, {
+
+      const parcelLayer = L.geoJSON(parcelsFc, {
         style: { weight: 2, color: '#334155', fillOpacity: 0.07 },
-        onEachFeature: (f, l) => {
-          const p: any = f.properties || {};
+        onEachFeature: (f: any, l: any) => {
+          const p = f.properties || {};
           l.bindPopup(`<b>Parcel ${p.id ?? ''}</b><br/>Owner: ${p.owner ?? ''}`);
           l.on('click', () => { selectParcel(p.id, f as Feature); });
         }
-      }).addTo(mapRef.current as L.Map);
-      parcelLayerRef.current = layer;
-      try { mapRef.current!.fitBounds(layer.getBounds(), { padding: [20,20] }); } catch {}
+      }).addTo(mapRef.current as any);
+      parcelLayerRef.current = parcelLayer;
+      try { mapRef.current!.fitBounds(parcelLayer.getBounds(), { padding: [20,20] }); } catch {}
 
       // Optional overlays
       fetch('/data/roads_sample.json').then(r=>r.json()).then(fc2 => {
         if (cancelled || !mapRef.current) return;
         roadsRef.current = L.geoJSON(fc2, { style: { color: '#ea580c', weight: 2 } });
-        if (showRoads) roadsRef.current.addTo(mapRef.current as L.Map);
+        if (showRoads) roadsRef.current.addTo(mapRef.current as any);
       });
       fetch('/data/zoning_sample.json').then(r=>r.json()).then(fc3 => {
         if (cancelled || !mapRef.current) return;
         zoningRef.current = L.geoJSON(fc3, { style: { color: '#8b5cf6', weight: 1, fillOpacity: 0.06 } });
-        if (showZoning) zoningRef.current.addTo(mapRef.current as L.Map);
+        if (showZoning) zoningRef.current.addTo(mapRef.current as any);
       });
-    });
+
+    })();
 
     return () => {
-      cancelled = true;
       if (mapRef.current) { mapRef.current.remove(); mapRef.current = null; }
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  async function ensureLeafletDraw() {
-    if (leafletDrawLoadedRef.current) return;
-    await import('leaflet-draw'); // side-effect import augments L with Draw
-    leafletDrawLoadedRef.current = true;
-  }
-
-  function clearLayer(ref: React.MutableRefObject<L.GeoJSON | null>) {
+  // ---------- Layer helpers ----------
+  function clearLayer(ref: React.MutableRefObject<any>) {
     if (!mapRef.current || !ref.current) return;
     mapRef.current.removeLayer(ref.current);
     ref.current = null;
   }
 
-  // Toggle visibility for preloaded GeoJSON overlay layers (e.g., Roads/Zoning)
-  function toggleLayer(ref: React.MutableRefObject<L.GeoJSON | null>, show: boolean) {
+  function toggleLayer(ref: React.MutableRefObject<any>, show: boolean) {
     if (!mapRef.current) return;
-    const layer = ref?.current as any;
-    if (!layer) return; // if not loaded yet, the loader will respect showRoads/showZoning later
+    const layer = ref?.current;
+    if (!layer) return;
     if (show) { try { layer.addTo(mapRef.current); } catch {} }
     else { try { mapRef.current.removeLayer(layer); } catch {} }
   }
@@ -164,14 +176,15 @@ export default function Home() {
   function selectParcel(id: number, f?: Feature) {
     setSelectedId(id);
     setSelectedFeature(f || null);
-    if (!mapRef.current) return;
+    if (!mapRef.current || !f) return;
+    const L = LRef.current;
     clearLayer(selectionRef);
-    if (!f) return;
     selectionRef.current = L.geoJSON(f, { style: { color: '#16a34a', weight: 3, fillOpacity: 0.1 } }).addTo(mapRef.current);
   }
 
   function zoomToRow(f: any) {
     if (!mapRef.current) return;
+    const L = LRef.current;
     setSelectedId(f?.properties?.id ?? null);
     setSelectedFeature(f as any);
     clearLayer(selectionRef);
@@ -184,16 +197,15 @@ export default function Home() {
 
   async function runSearch() {
     const fc: FeatureCollection = await fetch('/api/search?text=' + encodeURIComponent(query)).then(r=>r.json());
-    if (!mapRef.current) return;
+    if (!mapRef.current || !fc.features.length) return;
+    const L = await ensureLeaflet();
     clearLayer(selectionRef);
-    if (fc.features.length) {
-      const first = fc.features[0];
-      setSelectedId(first.properties?.id ?? null);
-      setSelectedFeature(first as any);
-      selectionRef.current = L.geoJSON(first, { style: { color: '#16a34a', weight: 3, fillOpacity: 0.15 } }).addTo(mapRef.current);
-      setTableFeatures(fc);
-      try { mapRef.current.fitBounds((selectionRef.current as any).getBounds(), { padding: [20,20] }); } catch {}
-    }
+    const first = fc.features[0] as any;
+    setSelectedId(first.properties?.id ?? null);
+    setSelectedFeature(first as Feature);
+    selectionRef.current = L.geoJSON(first, { style: { color: '#16a34a', weight: 3, fillOpacity: 0.15 } }).addTo(mapRef.current);
+    setTableFeatures(fc);
+    try { mapRef.current.fitBounds((selectionRef.current as any).getBounds(), { padding: [20,20] }); } catch {}
   }
 
   async function makeBuffer() {
@@ -203,6 +215,7 @@ export default function Home() {
     const data = await res.json();
     setStatus('');
     if (!mapRef.current) return;
+    const L = await ensureLeaflet();
     clearLayer(bufferRef);
     bufferRef.current = L.geoJSON(data.buffer, { style: { color: '#2563eb', dashArray: '4,3', weight: 2 } }).addTo(mapRef.current);
     if (data.intersects?.features?.length) {
@@ -225,22 +238,24 @@ export default function Home() {
     const { default: html2canvas } = await import('html2canvas');
     const m: any = mapRef.current;
 
-    // Hide overlay controls while capturing
+    // Hide overlay during capture
     const ov = overlayRef.current;
     const prevVis = ov?.style.visibility;
     if (ov) ov.style.visibility = 'hidden';
 
-    // If current base lacks crossOrigin, swap to a CORS-friendly one temporarily (Carto Light/Dark)
+    // Ensure CORS-friendly base (temporary) if needed
     let usedTemp = false;
     let tempBase: any = null;
-    const canUseCurrent = !!(m._currentBase && (m._currentBase.options?.crossOrigin || m._currentBase.getLayers)); // groups OK
+    const canUseCurrent = !!(m._currentBase && (m._currentBase.options?.crossOrigin || m._currentBase.getLayers));
     if (!canUseCurrent) {
       const fallbackKind = dark ? 'carto-dark' : 'carto';
       tempBase = getBasemapLayer(fallbackKind as any);
-      m.addLayer(tempBase);
-      if (tempBase.bringToBack) try { tempBase.bringToBack(); } catch {}
-      usedTemp = true;
-      await new Promise<void>(resolve => tempBase.on ? tempBase.on('load', () => setTimeout(resolve, 80)) : setTimeout(resolve, 120));
+      if (tempBase) {
+        m.addLayer(tempBase);
+        if (tempBase.bringToBack) try { tempBase.bringToBack(); } catch {}
+        usedTemp = true;
+        await new Promise<void>(resolve => tempBase.on ? tempBase.on('load', () => setTimeout(resolve, 80)) : setTimeout(resolve, 120));
+      }
     }
 
     const canvas = await html2canvas(mapDivRef.current, { useCORS: true, allowTaint: true, backgroundColor: null } as any);
@@ -248,7 +263,6 @@ export default function Home() {
     const a = document.createElement('a');
     a.href = url; a.download = 'map.png'; a.click();
 
-    // Restore
     if (usedTemp && tempBase) { try { m.removeLayer(tempBase); } catch {} }
     if (ov) ov.style.visibility = prevVis || '';
   }
@@ -267,7 +281,9 @@ export default function Home() {
     pdf.save('map.pdf');
   }
 
-  function getBasemapLayer(kind: 'osm'|'carto'|'carto-dark'|'esri'|'hybrid'): L.Layer {
+  function getBasemapLayer(kind: 'osm'|'carto'|'carto-dark'|'esri'|'hybrid'): any {
+    const L = LRef.current;
+    if (!L) return null;
     const mk = (url: string) => L.tileLayer(url, { maxZoom: 19, crossOrigin: true as any });
     if (kind === 'carto') return mk('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png');
     if (kind === 'carto-dark') return mk('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png');
@@ -282,8 +298,11 @@ export default function Home() {
 
   function setBasemapLayer(kind: 'osm'|'carto'|'carto-dark'|'esri'|'hybrid') {
     if (!mapRef.current) return;
+    const L = LRef.current;
+    if (!L) return;
     const m = mapRef.current as any;
     const next = getBasemapLayer(kind);
+    if (!next) return;
     if (m._currentBase) m.removeLayer(m._currentBase);
     m._currentBase = next.addTo(mapRef.current!);
     if ('bringToBack' in (m._currentBase as any)) { try { (m._currentBase as any).bringToBack(); } catch {} }
@@ -292,7 +311,7 @@ export default function Home() {
 
   function computeStats(f: Feature) {
     try {
-      const aHa = area(f as any) / 10_000; // m² → ha
+      const aHa = area(f as any) / 10_000;
       const line = polygonToLine(f as any);
       const pKm = length(line as any, { units: 'kilometers' });
       return { areaHa: aHa, perimeterKm: pKm };
@@ -307,6 +326,7 @@ export default function Home() {
     const txt = await file.text();
     const gj = JSON.parse(txt);
     if (!mapRef.current) return;
+    const L = await ensureLeaflet();
     if (aoiRef.current) { mapRef.current.removeLayer(aoiRef.current); aoiRef.current = null; }
     aoiRef.current = L.geoJSON(gj, { style: { color: '#0ea5e9', weight: 2 } }).addTo(mapRef.current);
     setStatus('Finding parcels within AOI...');
@@ -323,7 +343,7 @@ export default function Home() {
     }
   }
 
-  // UI -----------------------------------------------------------------------
+  // ----------------------------- UI -----------------------------
   return (
     <main className={'max-w-6xl mx-auto p-4'}>
       <header className="mb-4 rounded-2xl bg-gradient-to-r from-blue-600 to-indigo-600 p-5 text-white shadow">

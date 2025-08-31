@@ -1,14 +1,10 @@
 // types/turf.d.ts
 
-// @turf/length
+// --- @turf/length ---
 declare module '@turf/length' {
     import type {
-      Feature,
-      FeatureCollection,
-      LineString,
-      MultiLineString,
-      Polygon,
-      MultiPolygon,
+      Feature, FeatureCollection,
+      LineString, MultiLineString, Polygon, MultiPolygon
     } from 'geojson';
   
     type LengthInput =
@@ -23,15 +19,11 @@ declare module '@turf/length' {
     export default length;
   }
   
-  // @turf/polygon-to-line
+  // --- @turf/polygon-to-line ---
   declare module '@turf/polygon-to-line' {
     import type {
-      Feature,
-      FeatureCollection,
-      Polygon,
-      MultiPolygon,
-      LineString,
-      MultiLineString,
+      Feature, FeatureCollection,
+      Polygon, MultiPolygon, LineString, MultiLineString
     } from 'geojson';
   
     const polygonToLine: (
@@ -39,5 +31,11 @@ declare module '@turf/length' {
     ) => Feature<LineString | MultiLineString> | FeatureCollection<LineString | MultiLineString>;
   
     export default polygonToLine;
+  }
+  
+  // (Optional) if your editor ever flags @turf/area
+  declare module '@turf/area' {
+    const area: (g: any) => number;
+    export default area;
   }
   
