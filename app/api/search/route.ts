@@ -1,12 +1,14 @@
 import { NextResponse } from 'next/server';
 import { pool } from '@/lib/db';
 
+export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
-export async function GET(req: Request) {
+export async function GET(req?: Request) {
   try {
-    const { searchParams } = new URL(req.url);
-    const text = (searchParams.get('text') || '').trim();
+    const url = (req && typeof req.url === 'string') ? req.url : 'http://localhost/';
+    const u = new URL(url, 'http://localhost'); // base guards against relative URLs
+    const text = (u.searchParams.get('text') || '').trim();
 
     if (!text) {
       const fc = (await import('@/data/parcels_sample.json')).default as any;
