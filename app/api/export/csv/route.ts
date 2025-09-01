@@ -1,30 +1,26 @@
 import { NextResponse } from 'next/server';
 import { pool } from '@/lib/db';
 
-type ParcelRow = {
-  id: number;
-  owner: string | null;
-  wkt: string;
-};
+type ParcelRow = { id: number; owner: string | null; wkt: string };
 
-export async function GET() {
+export const dynamic = 'force-dynamic';
+
+export async function GET(_req: Request) {
   try {
     const { rows } = await pool.query<ParcelRow>(
       'SELECT id, owner, ST_AsText(geom) AS wkt FROM parcels ORDER BY id'
     );
-
     const header = 'id,owner,wkt\n';
     const body = rows
       .map((r: ParcelRow) => `${r.id},${JSON.stringify(r.owner ?? '')},${JSON.stringify(r.wkt)}`)
       .join('\n');
-
     return new NextResponse(header + body, {
       headers: {
         'content-type': 'text/csv',
         'content-disposition': 'attachment; filename="parcels.csv"',
       },
     });
-  } catch (e) {
+  } catch {
     const fc = (await import('@/data/parcels_sample.json')).default as any;
     const header = 'id,owner,geometry\n';
     const body = (fc.features || [])
@@ -35,7 +31,6 @@ export async function GET() {
           )}`
       )
       .join('\n');
-
     return new NextResponse(header + body, {
       headers: {
         'content-type': 'text/csv',

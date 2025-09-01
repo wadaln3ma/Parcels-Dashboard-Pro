@@ -1,4 +1,3 @@
-// app/api/health/route.ts
 import { NextResponse } from 'next/server';
 import { pool } from '@/lib/db';
 
@@ -12,7 +11,9 @@ export async function GET(_req: Request) {
       db: 'connected',
       now: r.rows?.[0]?.now ?? null,
       ssl: !!process.env.PGSSL,
-      host: process.env.PGHOST || (process.env.DATABASE_URL ? new URL(process.env.DATABASE_URL).hostname : null),
+      host:
+        process.env.PGHOST ||
+        (process.env.DATABASE_URL ? new URL(process.env.DATABASE_URL).hostname : null),
     });
   } catch (e: any) {
     return NextResponse.json(
