@@ -49,7 +49,6 @@ export default function Home() {
   async function ensureLeaflet() {
     if (!LRef.current) {
       const mod = await import('leaflet');
-      // Some bundlers export as default, some as module—support both
       LRef.current = (mod as any).default || mod;
     }
     return LRef.current;
@@ -107,19 +106,28 @@ export default function Home() {
         if (aoiRef.current) { mapRef.current.removeLayer(aoiRef.current); aoiRef.current = null; }
         aoiRef.current = L.geoJSON(gj, { style: { color: '#0ea5e9', weight: 2 } }).addTo(mapRef.current);
         setStatus('Finding parcels within drawn AOI...');
-        const res = await fetch('/api/within?distance=' + (aoiBufferDist||0), {
-          method: 'POST', headers: {'content-type':'application/json'}, body: JSON.stringify(gj)
-        });
-        const fc = await res.json();
-        setStatus('');
-        if (!mapRef.current) return;
-        if (fc.features?.length) {
-          clearLayer(selectionRef);
-          selectionRef.current = L.geoJSON(fc, { style: { color: '#16a34a', weight: 2, fillOpacity: 0.1 } }).addTo(mapRef.current);
-          setTableFeatures(fc);
-          try { mapRef.current.fitBounds((selectionRef.current as any).getBounds(), { padding: [20,20] }); } catch {}
-        } else {
-          setTableFeatures({ type:'FeatureCollection', features: [] });
+        try {
+          const res = await fetch('/api/within?distance=' + (aoiBufferDist||0), {
+            method: 'POST', headers: {'content-type':'application/json'}, body: JSON.stringify(gj)
+          });
+          if (!res.ok) {
+            const text = await res.text();
+            setStatus(`AOI error: ${text}`);
+            return;
+          }
+          const fc = await res.json();
+          setStatus('');
+          if (!mapRef.current) return;
+          if (fc.features?.length) {
+            clearLayer(selectionRef);
+            selectionRef.current = L.geoJSON(fc, { style: { color: '#16a34a', weight: 2, fillOpacity: 0.1 } }).addTo(mapRef.current);
+            setTableFeatures(fc);
+            try { mapRef.current.fitBounds((selectionRef.current as any).getBounds(), { padding: [20,20] }); } catch {}
+          } else {
+            setTableFeatures({ type:'FeatureCollection', features: [] });
+          }
+        } catch (err: any) {
+          setStatus(`AOI error: ${err?.message || String(err)}`);
         }
       });
 
@@ -211,16 +219,27 @@ export default function Home() {
   async function makeBuffer() {
     if (!selectedId) { setStatus('Select a parcel first.'); return; }
     setStatus('Buffering…');
-    const res = await fetch(`/api/buffer?parcelId=${selectedId}&distance=${bufferDist}`);
-    const data = await res.json();
-    setStatus('');
-    if (!mapRef.current) return;
-    const L = await ensureLeaflet();
-    clearLayer(bufferRef);
-    bufferRef.current = L.geoJSON(data.buffer, { style: { color: '#2563eb', dashArray: '4,3', weight: 2 } }).addTo(mapRef.current);
-    if (data.intersects?.features?.length) {
-      setTableFeatures(data.intersects);
-      L.geoJSON(data.intersects, { style: { color: '#ef4444', weight: 2, fillOpacity: 0.1 } }).addTo(mapRef.current);
+    try {
+      const res = await fetch(`/api/buffer?parcelId=${selectedId}&distance=${bufferDist}`);
+      if (!res.ok) {
+        const text = await res.text();
+        setStatus(`Buffer error: ${text}`);
+        return;
+      }
+      const data = await res.json();
+      setStatus('');
+      if (!mapRef.current) return;
+      const L = await ensureLeaflet();
+      clearLayer(bufferRef);
+      if (data.buffer) {
+        bufferRef.current = L.geoJSON(data.buffer, { style: { color: '#2563eb', dashArray: '4,3', weight: 2 } }).addTo(mapRef.current);
+      }
+      if (data.intersects?.features?.length) {
+        setTableFeatures(data.intersects);
+        L.geoJSON(data.intersects, { style: { color: '#ef4444', weight: 2, fillOpacity: 0.1 } }).addTo(mapRef.current);
+      }
+    } catch (err: any) {
+      setStatus(`Buffer error: ${err?.message || String(err)}`);
     }
   }
 
@@ -330,16 +349,25 @@ export default function Home() {
     if (aoiRef.current) { mapRef.current.removeLayer(aoiRef.current); aoiRef.current = null; }
     aoiRef.current = L.geoJSON(gj, { style: { color: '#0ea5e9', weight: 2 } }).addTo(mapRef.current);
     setStatus('Finding parcels within AOI...');
-    const res = await fetch('/api/within?distance=' + (aoiBufferDist||0), { method: 'POST', headers: {'content-type':'application/json'}, body: JSON.stringify(gj) });
-    const fc = await res.json();
-    setStatus('');
-    if (fc.features?.length) {
-      clearLayer(selectionRef);
-      selectionRef.current = L.geoJSON(fc, { style: { color: '#16a34a', weight: 2, fillOpacity: 0.1 } }).addTo(mapRef.current!);
-      setTableFeatures(fc);
-      try { mapRef.current!.fitBounds((selectionRef.current as any).getBounds(), { padding: [20,20] }); } catch {}
-    } else {
-      setTableFeatures({ type:'FeatureCollection', features: [] });
+    try {
+      const res = await fetch('/api/within?distance=' + (aoiBufferDist||0), { method: 'POST', headers: {'content-type':'application/json'}, body: JSON.stringify(gj) });
+      if (!res.ok) {
+        const text = await res.text();
+        setStatus(`AOI error: ${text}`);
+        return;
+      }
+      const fc = await res.json();
+      setStatus('');
+      if (fc.features?.length) {
+        clearLayer(selectionRef);
+        selectionRef.current = L.geoJSON(fc, { style: { color: '#16a34a', weight: 2, fillOpacity: 0.1 } }).addTo(mapRef.current!);
+        setTableFeatures(fc);
+        try { mapRef.current!.fitBounds((selectionRef.current as any).getBounds(), { padding: [20,20] }); } catch {}
+      } else {
+        setTableFeatures({ type:'FeatureCollection', features: [] });
+      }
+    } catch (err: any) {
+      setStatus(`AOI error: ${err?.message || String(err)}`);
     }
   }
 
