@@ -28,7 +28,7 @@ export async function POST(req: Request) {
     const { rows } = await pool.query(sql, [JSON.stringify(body), distance]);
     const fc = rows[0]?.fc || { type: 'FeatureCollection', features: [] };
     return NextResponse.json(fc);
-  } catch {
-    return NextResponse.json({ type: 'FeatureCollection', features: [] });
+  } catch (e) {
+    return NextResponse.json({ type: 'FeatureCollection', features: [], error: (e as any)?.message || String(e) });
   }
 }

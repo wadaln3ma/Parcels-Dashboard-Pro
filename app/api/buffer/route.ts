@@ -39,7 +39,11 @@ export async function GET(req: Request) {
       buffer: buffer ? { type: 'Feature', properties: {}, geometry: buffer } : null,
       intersects: { type: 'FeatureCollection', features },
     });
-  } catch {
-    return NextResponse.json({ buffer: null, intersects: { type: 'FeatureCollection', features: [] } });
+  } catch (e) {
+    return NextResponse.json({
+      buffer: null,
+      intersects: { type: 'FeatureCollection', features: [] },
+      error: (e as any)?.message || String(e),
+    }, { status: 500 });
   }
 }

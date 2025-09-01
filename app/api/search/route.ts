@@ -42,7 +42,7 @@ export async function GET(req: Request) {
       geometry: r.geometry,
     }));
     return NextResponse.json({ type: 'FeatureCollection', features });
-  } catch {
+  } catch (e) {
     const fc = (await import('@/data/parcels_sample.json')).default as any;
     return NextResponse.json(fc);
   }
