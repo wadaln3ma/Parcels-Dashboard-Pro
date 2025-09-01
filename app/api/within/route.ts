@@ -8,7 +8,16 @@ export async function POST(req: Request) {
   try {
     const { searchParams } = new URL(req.url);
     const distance = Number(searchParams.get('distance') || '0'); // meters
-    const body = await req.json(); // Feature or FeatureCollection
+
+    let body: any = null;
+    try {
+      body = await req.json();
+    } catch {
+      body = null;
+    }
+    if (!body) {
+      return NextResponse.json({ type: 'FeatureCollection', features: [] });
+    }
 
     const sql = `
       WITH aoi AS (
@@ -22,7 +31,7 @@ export async function POST(req: Request) {
           'geometry', ST_AsGeoJSON(p.geom)::json
         )), '[]'::json)
       ) AS fc
-      FROM parcels p, aoi
+      FROM public.parcels p, aoi
       WHERE ST_Intersects(p.geom, aoi.geom)
     `;
     const { rows } = await pool.query(sql, [JSON.stringify(body), distance]);

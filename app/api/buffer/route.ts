@@ -5,21 +5,32 @@ export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
 export async function GET(req: Request) {
-  try {
-    const { searchParams } = new URL(req.url);
-    const parcelId = Number(searchParams.get('parcelId') || '');
-    const distance = Number(searchParams.get('distance') || '0'); // meters
+  const { searchParams } = new URL(req.url);
+  const parcelId = Number(searchParams.get('parcelId') || '');
+  const distance = Number(searchParams.get('distance') || '0'); // meters
 
-    if (!parcelId || Number.isNaN(parcelId)) {
-      return NextResponse.json({ error: 'parcelId required' }, { status: 400 });
+  if (!parcelId || Number.isNaN(parcelId)) {
+    return NextResponse.json({ error: 'parcelId required' }, { status: 400 });
+  }
+
+  try {
+    // 1) fetch the target geom first
+    const tgt = await pool.query('SELECT geom FROM public.parcels WHERE id = $1', [parcelId]);
+    if (!tgt.rows.length) {
+      return NextResponse.json(
+        { error: `parcel ${parcelId} not found`, buffer: null, intersects: { type:'FeatureCollection', features: [] } },
+        { status: 404 }
+      );
     }
 
+    // 2) run buffer + intersects
     const sql = `
-      WITH target AS (SELECT geom FROM parcels WHERE id = $1),
-      buf AS (SELECT ST_Buffer(geom::geography, $2)::geometry AS g FROM target),
+      WITH buf AS (
+        SELECT ST_Buffer(($1)::geography, $2)::geometry AS g
+      ),
       hits AS (
         SELECT p.id, p.owner, ST_AsGeoJSON(p.geom)::json AS geom
-        FROM parcels p, buf b
+        FROM public.parcels p, buf b
         WHERE ST_Intersects(p.geom, b.g)
       )
       SELECT
@@ -30,7 +41,7 @@ export async function GET(req: Request) {
           'geometry', geom
         )) FROM hits) AS features
     `;
-    const { rows } = await pool.query(sql, [parcelId, distance]);
+    const { rows } = await pool.query(sql, [tgt.rows[0].geom, distance]);
     const row = rows[0] || {};
     const buffer = row.buffer || null;
     const features = row.features || [];
@@ -40,7 +51,6 @@ export async function GET(req: Request) {
       intersects: { type: 'FeatureCollection', features },
     });
   } catch (e: any) {
-    // Return the error text so the client can display it
     return new NextResponse(
       JSON.stringify({ error: e?.message || String(e) }),
       { status: 500, headers: { 'content-type': 'application/json' } }
