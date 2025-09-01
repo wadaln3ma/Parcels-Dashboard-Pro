@@ -28,7 +28,10 @@ export async function POST(req: Request) {
     const { rows } = await pool.query(sql, [JSON.stringify(body), distance]);
     const fc = rows[0]?.fc || { type: 'FeatureCollection', features: [] };
     return NextResponse.json(fc);
-  } catch (e) {
-    return NextResponse.json({ type: 'FeatureCollection', features: [], error: (e as any)?.message || String(e) });
+  } catch (e: any) {
+    return new NextResponse(
+      JSON.stringify({ type: 'FeatureCollection', features: [], error: e?.message || String(e) }),
+      { status: 500, headers: { 'content-type': 'application/json' } }
+    );
   }
 }

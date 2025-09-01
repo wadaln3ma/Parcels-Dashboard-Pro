@@ -39,11 +39,11 @@ export async function GET(req: Request) {
       buffer: buffer ? { type: 'Feature', properties: {}, geometry: buffer } : null,
       intersects: { type: 'FeatureCollection', features },
     });
-  } catch (e) {
-    return NextResponse.json({
-      buffer: null,
-      intersects: { type: 'FeatureCollection', features: [] },
-      error: (e as any)?.message || String(e),
-    }, { status: 500 });
+  } catch (e: any) {
+    // Return the error text so the client can display it
+    return new NextResponse(
+      JSON.stringify({ error: e?.message || String(e) }),
+      { status: 500, headers: { 'content-type': 'application/json' } }
+    );
   }
 }
