@@ -4,14 +4,11 @@ import { pool } from '@/lib/db';
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
-export async function POST(req?: Request) {
+export async function POST(req: Request) {
   try {
-    const url = (req && typeof req.url === 'string') ? req.url : 'http://localhost/';
-    const u = new URL(url, 'http://localhost');
-    const distance = Number(u.searchParams.get('distance') || '0'); // meters
-    const body = (req && typeof req.json === 'function') ? await req.json() : null;
-
-    if (!body) return NextResponse.json({ type: 'FeatureCollection', features: [] });
+    const { searchParams } = new URL(req.url);
+    const distance = Number(searchParams.get('distance') || '0'); // meters
+    const body = await req.json(); // Feature or FeatureCollection
 
     const sql = `
       WITH aoi AS (

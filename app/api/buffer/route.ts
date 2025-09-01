@@ -4,12 +4,11 @@ import { pool } from '@/lib/db';
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
-export async function GET(req?: Request) {
+export async function GET(req: Request) {
   try {
-    const url = (req && typeof req.url === 'string') ? req.url : 'http://localhost/';
-    const u = new URL(url, 'http://localhost');
-    const parcelId = Number(u.searchParams.get('parcelId') || '');
-    const distance = Number(u.searchParams.get('distance') || '0'); // meters
+    const { searchParams } = new URL(req.url);
+    const parcelId = Number(searchParams.get('parcelId') || '');
+    const distance = Number(searchParams.get('distance') || '0'); // meters
 
     if (!parcelId || Number.isNaN(parcelId)) {
       return NextResponse.json({ error: 'parcelId required' }, { status: 400 });
